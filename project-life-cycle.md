@@ -1,7 +1,7 @@
 # Project Capture Document for D2L FDREL250 Data Extraction
 #### *Author: Emma Fisher*
 #### *Stakeholder: Matthew Zachreson*
-#### *Date: Todays Date*
+#### *Date: April 26, 2019*
 
 
 ## Background
