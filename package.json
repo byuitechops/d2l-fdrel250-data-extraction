@@ -1,0 +1,25 @@
+{
+  "name": "d2l-fdrel250-data-extraction",
+  "version": "1.0.0",
+  "description": "",
+  "main": "main.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node puppeteer.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/byuitechops/d2l-fdrel250-data-extraction.git"
+  },
+  "author": "Emma Fisher",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/byuitechops/d2l-fdrel250-data-extraction/issues"
+  },
+  "homepage": "https://github.com/byuitechops/d2l-fdrel250-data-extraction#readme",
+  "dependencies": {
+    "csv-parser": "^2.2.0",
+    "fs": "0.0.1-security",
+    "puppeteer": "^1.13.0"
+  }
+}
