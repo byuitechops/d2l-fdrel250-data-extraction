@@ -1,3 +1,6 @@
+/* I took this code from Seth Childers' repository mid-course-evaluation-links and simply modified a couple things */
+
+
 /********************************************************************************************
  * Description: 
  * This tool is to find the topic in each course that has the old 'End of Course Evaluation'
@@ -72,15 +75,17 @@ function runCourse(course) {
         });
         var topics = getTopics(tableOfContents);
 
-        var topicName = [];
+        var topicObj = [];
         // check if there are more than one
         var found = topics.filter(topic => {
             if (topic.TypeIdentifier !== 'File' && /(toolkit)|(250)|(250\s*assessment)/gi.test(topic.Title) && !topic.Title.includes('Final')) {
-                console.log(topic.TypeIdentifier);
-                topicName.push(topic.Title);
+                topicObj.push(topic);
                 return topic;
             }
         });
+
+        console.log(topicObj);
+
 
         // throw an error if there is more than one mid-course eval
         if (found.length > 1) {
@@ -92,7 +97,8 @@ function runCourse(course) {
         resolve({
             'Course Name': course.name,
             'Course ID': course.id,
-            'Name': topicName,
+            'Name': topicObj[0].Title,
+            'Quiz Id': topicObj[0].TopicId,
             'Link to Evaluation': found.length > 0 ? `https://byui.brightspace.com${found[0].Url}` : '',
             'Evaluation Found': found.length > 0 ? 'Found' : 'Not Found',
             'Errors': Object.keys(error).length > 0 ? JSON.stringify(error) : ''
@@ -181,7 +187,7 @@ async function runAllCourses() {
         }
 
         /* Format and create the CSV file with the log data */
-        var csvData = d3.csvFormat(data, ["Course Name", "Course ID", "Name", "Link to Evaluation", "Evaluation Found", "Errors"]);
+        var csvData = d3.csvFormat(data, ["Course Name", "Course ID", "Name", "Quiz ID", "Link to Evaluation", "Evaluation Found", "Errors"]);
 
         /* Log the csv, and download it */
         download(csvData, 'pathwayReport.csv');
