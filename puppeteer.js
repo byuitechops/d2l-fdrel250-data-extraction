@@ -1,22 +1,4 @@
-const fs = require('fs');
-const csv = require('csv-parser');
 const puppeteer = require('puppeteer');
-
-
-function readFile() {
-    var links = [];
-    fs.createReadStream('./pathwayReport.csv')
-        .pipe(csv())
-        .on('data', (data) => {
-            links.push(data['Link to Evaluation']);
-        })
-        .on('end', () => {
-            for (var i = 0; i < links.length; i++) {
-                getQuizData(links[i]);
-            }
-        })
-
-}
 
 async function waitForPopUpToBeThere(browser) {
     return new Promise((resolve, error) => {
@@ -79,47 +61,6 @@ async function doStuff(link) {
     await page.goto(link);
     await page.waitForSelector('.di_i');
 
-
-
-
-    // /* Click all the popups buttons on the page */
-    // page.evaluate(() => {
-    //     var popupButtons = document.querySelectorAll('table[id*="z"] .di_i');
-    //     for (var i = 0; i < popupButtons.length; i++) {
-    //         popupButtons[i].click();
-    //     }
-    // })
-
-    // var popupButtons = await page.$$('table[id*="z"] .di_i');
-    // for (var i = 0; i < popupButtons.length; i++) {
-    //     console.log("got a page")
-    // }
-
-    // // get all pages
-    // var pages = await browser.pages()
-    // var content = [];
-    // for (const page of pages) {
-    //     await page.waitForSelector('.vui-input.d2l-select');
-    //     await page.click('.vui-input.d2l-select');
-    //     await page.evaluate(() => {
-    //         var options = document.querySelector('.vui-input.d2l-select').children;
-    //         options[0].click[0];
-    //     })
-    //     // console.log(await page.content())   // new page now appear!
-    // }
-
-    // await page.goto('https://byui.brightspace.com/d2l/common/popup/popup.d2l?ou=288274&queryString=ou%3D288274%26qi%3D706568%26ui%3D82812%26isov%3D1%26ai%3D0%26isdialog%3D1&footerMsg=&buttonOffset=0&popBodySrc=/d2l/lms/quizzing/admin/mark/quiz_mark_attempt.d2l&width=715&height=750&hasStatusBar=false&hasAutoScroll=true&hasHiddenHeader=false&p=d2l_cntl_2fa811de8fde4c7b80a79e82b401e9cd_2')
-
-    // await page.waitForSelector('#z_i');
-    // await page.click('#z_i');
-    // await page.evaluate(() => {
-    //     var options = document.querySelector('.vui-input.d2l-select').children;
-    //     options[0].click[0];
-    // })
-
-
-
-
     try {
 
         var submissions = await page.$$('a[title*=Submission]');
@@ -133,29 +74,45 @@ async function doStuff(link) {
             submission.click()
         ]);
 
-        // await once(browser, 'targetcreated');
-        // wait for the popup
-        // await waitForPopUpToBeThere(browser)
 
-        // await popup.waitForSelector(`frame[title=Body]`)
+        // await popup.evaluate(() => {
+        //     // document.querySelector("frame[title=Body]").contentDocument.querySelector("select").click();
+        //     console.log(document.querySelector("frame[title=Body]").contentDocument)
+        // })
 
-        var frames = popup.frames();
-        frames.forEach(f => console.log(f.name()))
+        await popup.waitForFunction(() => {
+            // return document.querySelector("frame[title=Body]") !== null;
+            var frame = document.querySelector('frameset frame[title=Body]')
+            if (frame === null)
+                return false;
+
+            return frame.contentDocument.querySelector('select[name=attempt]') !== null;
+        });
+
+        var frameset = await popup.frames()['0'];
+        var childFrames = await frameset.childFrames();
+        var frame = childFrames.find(f => f.name() === "Body");
 
 
+        await frame.evaluate(() => {
+            return new Promise((resolve, reject) => {
+                var select = document.querySelector('select[name=attempt]');
+                var lastAttempt = select.length;
 
-
-
+                for (var i = 0; i < select.length; i++) {
+                    if (select.options[i].text = `Attempt ${lastAttempt - 1}`) {
+                        select.value = select.options[i].value;
+                    }
+                }
+                resolve();
+            })
+        })
 
 
     } catch (error) {
         console.log("MAKE A REAL ERROR");
         console.log(error);
     }
-    // change the first on the page
-    // popup.select(`select`, )
-
-    // }
 
 }
 
