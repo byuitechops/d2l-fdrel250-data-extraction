@@ -39,7 +39,7 @@ Matthew Zachreson simply told me.
 #### Definition of Outputs
 
 JSON
-``` 
+```js
 {
     "Semester": {
         "name": "WINTER 2018",

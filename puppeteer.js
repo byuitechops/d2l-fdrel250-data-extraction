@@ -1,5 +1,25 @@
 const puppeteer = require('puppeteer');
 
+/* These are the links to the page where the 250 Toolkit assessmnet is graded in each course */
+var allLinks = ['https://byui.brightspace.com/d2l/lms/grades/admin/enter/grade_item_edit.d2l?objectId=1745428&ou=288274',
+    'https://byui.brightspace.com/d2l/lms/grades/admin/enter/grade_item_edit.d2l?objectId=1750705&ou=290362',
+    'https://byui.brightspace.com/d2l/lms/grades/admin/enter/grade_item_edit.d2l?objectId=1738936&ou=326763',
+    'https://byui.brightspace.com/d2l/lms/grades/admin/enter/grade_item_edit.d2l?objectId=1737441&ou=327760',
+    'https://byui.brightspace.com/d2l/lms/grades/admin/enter/grade_item_edit.d2l?objectId=1739166&ou=341283',
+    'https://byui.brightspace.com/d2l/lms/grades/admin/enter/grade_item_edit.d2l?objectId=1836945&ou=365243',
+    'https://byui.brightspace.com/d2l/lms/grades/admin/enter/grade_item_edit.d2l?objectId=1881080&ou=375413',
+    'https://byui.brightspace.com/d2l/lms/grades/admin/enter/grade_item_edit.d2l?objectId=1881154&ou=375417',
+    'https://byui.brightspace.com/d2l/lms/grades/admin/enter/grade_item_edit.d2l?objectId=1881275&ou=376061',
+    'https://byui.brightspace.com/d2l/lms/grades/admin/enter/grade_item_edit.d2l?objectId=1949190&ou=388402',
+    'https://byui.brightspace.com/d2l/lms/grades/admin/enter/grade_item_edit.d2l?objectId=1956053&ou=389359',
+    'https://byui.brightspace.com/d2l/lms/grades/admin/enter/grade_item_edit.d2l?objectId=1983807&ou=394370',
+    'https://byui.brightspace.com/d2l/lms/grades/admin/enter/grade_item_edit.d2l?objectId=2061724&ou=412335',
+    'https://byui.brightspace.com/d2l/lms/grades/admin/enter/grade_item_edit.d2l?objectId=2061755&ou=412339',
+    'https://byui.brightspace.com/d2l/lms/grades/admin/enter/grade_item_edit.d2l?objectId=2077072&ou=417283',
+    'https://byui.brightspace.com/d2l/lms/grades/admin/enter/grade_item_edit.d2l?objectId=2116011&ou=425434',
+    'https://byui.brightspace.com/d2l/lms/grades/admin/enter/grade_item_edit.d2l?objectId=2130217&ou=428547',
+    'https://byui.brightspace.com/d2l/lms/grades/admin/enter/user_list_view.d2l?ou=469776'];
+
 async function waitForPopUpToBeThere(browser) {
     return new Promise((resolve, error) => {
         var tryCount = 0;
@@ -26,7 +46,7 @@ function once(emitter, event) {
  * This function completes all the puppeteer tasks of clicking through the d2l
  * UI and scraping quiz data from it. All the smaller steps are commented below.
  *******************************************************************************/
-async function doStuff(link) {
+async function clickAndScrape(link) {
     /* Define the browser */
     const browser = await puppeteer.launch({
         // slowMo: 100,
@@ -92,21 +112,26 @@ async function doStuff(link) {
         var frameset = await popup.frames()['0'];
         var childFrames = await frameset.childFrames();
         var frame = childFrames.find(f => f.name() === "Body");
-
-
-        await frame.evaluate(() => {
-            return new Promise((resolve, reject) => {
-                var select = document.querySelector('select[name=attempt]');
-                var lastAttempt = select.length;
-
-                for (var i = 0; i < select.length; i++) {
-                    if (select.options[i].text = `Attempt ${lastAttempt - 1}`) {
-                        select.value = select.options[i].value;
-                    }
-                }
-                resolve();
-            })
+        var attempts = await frame.$$('select[name=attempt] option');
+        attempts.forEach(attempt => {
+            console.log(attempt.val());
         })
+
+        // await frame.evaluate(() => {
+        //     return new Promise((resolve, reject) => {
+        //         var select = document.querySelector('select[name=attempt]');
+        //         var lastAttempt = select.length;
+        //         console.log(lastAttempt);
+
+        //         for (var i = 0; i < select.length; i++) {
+        //             if (select.options[i].text = `Attempt ${lastAttempt - 1}`) {
+        //                 console.log('selected');
+        //                 select.value = select.options[i].value;
+        //             }
+        //         }
+        //         resolve();
+        //     })
+        // })
 
 
     } catch (error) {
@@ -118,25 +143,5 @@ async function doStuff(link) {
 
 
 /* Function call, passes in one test URL but should eventually run through allLinks */
-doStuff('https://byui.brightspace.com/d2l/lms/grades/admin/enter/grade_item_edit.d2l?objectId=1745428&ou=288274').catch(console.log)
+clickAndScrape('https://byui.brightspace.com/d2l/lms/grades/admin/enter/grade_item_edit.d2l?objectId=1745428&ou=288274').catch(console.log)
 
-
-/* These are the links to the page where the 250 Toolkit assessmnet is graded in each course */
-var allLinks = ['https://byui.brightspace.com/d2l/lms/grades/admin/enter/grade_item_edit.d2l?objectId=1745428&ou=288274',
-    'https://byui.brightspace.com/d2l/lms/grades/admin/enter/grade_item_edit.d2l?objectId=1750705&ou=290362',
-    'https://byui.brightspace.com/d2l/lms/grades/admin/enter/grade_item_edit.d2l?objectId=1738936&ou=326763',
-    'https://byui.brightspace.com/d2l/lms/grades/admin/enter/grade_item_edit.d2l?objectId=1737441&ou=327760',
-    'https://byui.brightspace.com/d2l/lms/grades/admin/enter/grade_item_edit.d2l?objectId=1739166&ou=341283',
-    'https://byui.brightspace.com/d2l/lms/grades/admin/enter/grade_item_edit.d2l?objectId=1836945&ou=365243',
-    'https://byui.brightspace.com/d2l/lms/grades/admin/enter/grade_item_edit.d2l?objectId=1881080&ou=375413',
-    'https://byui.brightspace.com/d2l/lms/grades/admin/enter/grade_item_edit.d2l?objectId=1881154&ou=375417',
-    'https://byui.brightspace.com/d2l/lms/grades/admin/enter/grade_item_edit.d2l?objectId=1881275&ou=376061',
-    'https://byui.brightspace.com/d2l/lms/grades/admin/enter/grade_item_edit.d2l?objectId=1949190&ou=388402',
-    'https://byui.brightspace.com/d2l/lms/grades/admin/enter/grade_item_edit.d2l?objectId=1956053&ou=389359',
-    'https://byui.brightspace.com/d2l/lms/grades/admin/enter/grade_item_edit.d2l?objectId=1983807&ou=394370',
-    'https://byui.brightspace.com/d2l/lms/grades/admin/enter/grade_item_edit.d2l?objectId=2061724&ou=412335',
-    'https://byui.brightspace.com/d2l/lms/grades/admin/enter/grade_item_edit.d2l?objectId=2061755&ou=412339',
-    'https://byui.brightspace.com/d2l/lms/grades/admin/enter/grade_item_edit.d2l?objectId=2077072&ou=417283',
-    'https://byui.brightspace.com/d2l/lms/grades/admin/enter/grade_item_edit.d2l?objectId=2116011&ou=425434',
-    'https://byui.brightspace.com/d2l/lms/grades/admin/enter/grade_item_edit.d2l?objectId=2130217&ou=428547',
-    'https://byui.brightspace.com/d2l/lms/grades/admin/enter/user_list_view.d2l?ou=469776']
