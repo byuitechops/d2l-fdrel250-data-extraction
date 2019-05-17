@@ -20,6 +20,10 @@ var allLinks = ['https://byui.brightspace.com/d2l/lms/grades/admin/enter/grade_i
     'https://byui.brightspace.com/d2l/lms/grades/admin/enter/grade_item_edit.d2l?objectId=2130217&ou=428547',
     'https://byui.brightspace.com/d2l/lms/grades/admin/enter/user_list_view.d2l?ou=469776'];
 
+async function timeout() {
+    return new Promise(resolve => setTimeout(resolve, 1500));
+}
+
 async function waitForPopUpToBeThere(browser) {
     return new Promise((resolve, error) => {
         var tryCount = 0;
@@ -40,6 +44,20 @@ async function waitForPopUpToBeThere(browser) {
 
 function once(emitter, event) {
     return new Promise(resolve => emitter.once(event, resolve));
+}
+
+async function scrapeData(frame) {
+    var data = await frame.$$eval('.d_tl.d_tm.d_tn', items => {
+        let tmp = {};
+        // set the sis user id
+        tmp.sis_user_id = items[0].innerText.split(' ').pop().replace(')', '');
+        tmp.date = items[2].innerText.split(' ').slice(1, 4).join(' ');
+
+        return tmp;
+    });
+    var divs = await frame.$$eval('.drt.d2l-htmlblock', div => div.map(d => d.innerText));
+    data.divs = divs.slice(1);
+    return data;
 }
 
 /********************************************************************************
@@ -100,39 +118,38 @@ async function clickAndScrape(link) {
         //     console.log(document.querySelector("frame[title=Body]").contentDocument)
         // })
 
+        /* Wait for popup and select most recent attempt */
         await popup.waitForFunction(() => {
-            // return document.querySelector("frame[title=Body]") !== null;
             var frame = document.querySelector('frameset frame[title=Body]')
             if (frame === null)
                 return false;
-
             return frame.contentDocument.querySelector('select[name=attempt]') !== null;
         });
-
         var frameset = await popup.frames()['0'];
         var childFrames = await frameset.childFrames();
         var frame = childFrames.find(f => f.name() === "Body");
-        var attempts = await frame.$$('select[name=attempt] option');
-        attempts.forEach(attempt => {
-            console.log(attempt.val());
-        })
+        var attempt = await frame.$$eval('select[name=attempt] option', e => {
+            let value;
+            e.reduce((accum, opt) => {
+                if (opt.innerText.slice(0, 7).toUpperCase() === 'ATTEMPT' && Number(opt.innerText.slice(-1)) > Number(accum.innerText.slice(-1))) {
+                    value = opt.value;
+                    return opt;
+                }
+                return accum;
+            }, { innerText: '0' });
+            return value;
+        });
+        // wait for popup to load then select generic
+        await timeout();
+        await frame.select('select[name=attempt]', '0');
+        // wait for reload then select most recent attempt
+        await timeout();
+        await frame.select('select[name=attempt]', attempt);
 
-        // await frame.evaluate(() => {
-        //     return new Promise((resolve, reject) => {
-        //         var select = document.querySelector('select[name=attempt]');
-        //         var lastAttempt = select.length;
-        //         console.log(lastAttempt);
-
-        //         for (var i = 0; i < select.length; i++) {
-        //             if (select.options[i].text = `Attempt ${lastAttempt - 1}`) {
-        //                 console.log('selected');
-        //                 select.value = select.options[i].value;
-        //             }
-        //         }
-        //         resolve();
-        //     })
-        // })
-
+        /* scrape data from popup */
+        await timeout();
+        var data = await scrapeData(frame);
+        console.log(data);
 
     } catch (error) {
         console.log("MAKE A REAL ERROR");
