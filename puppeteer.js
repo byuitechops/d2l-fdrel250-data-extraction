@@ -24,28 +24,6 @@ async function timeout() {
     return new Promise(resolve => setTimeout(resolve, 1500));
 }
 
-async function waitForPopUpToBeThere(browser) {
-    return new Promise((resolve, error) => {
-        var tryCount = 0;
-        var hi = setInterval(async function () {
-            tryCount += 1;
-            console.log(tryCount);
-            var pages = await browser.pages();
-            if (pages.length > 1) {
-                clearInterval(hi);
-                resolve();
-            } else if (tryCount > 10) {
-                clearInterval(hi);
-                error(new Error('Popup Time Out'));
-            }
-        }, 200);
-    });
-}
-
-function once(emitter, event) {
-    return new Promise(resolve => emitter.once(event, resolve));
-}
-
 async function scrapeData(frame) {
     var data = await frame.$$eval('.d_tl.d_tm.d_tn', items => {
         let tmp = {};
@@ -55,8 +33,53 @@ async function scrapeData(frame) {
 
         return tmp;
     });
-    var divs = await frame.$$eval('.drt.d2l-htmlblock', div => div.map(d => d.innerText));
-    data.divs = divs.slice(1);
+    data.link = await frame.url();
+    var questions = await frame.$$eval('.drt.d2l-htmlblock.d2l-htmlblock-deferred:not(.d2l-htmlblock-untrusted)', div => {
+        let num = 0;
+        return div.map(d => {
+            return { name: `Question ${++num}`, text: d.innerText };
+        });
+    });
+    var answers = await frame.$$eval('.drt.d2l-htmlblock.d2l-htmlblock-untrusted', div => {
+        return div.map(d => { return d.innerText; }).slice(1);
+    });
+
+    var multi = [];
+    let spot;
+    let texts = answers.filter((text, i) => {
+        if (text.search(/[b-d]\)\s\n\n\t\n\n/) !== -1) {
+            multi.push(text);
+            return false;
+        }
+        if (text.search(/a\)\s\n\n\t\n\n/) !== -1) {
+            multi.push(text);
+            spot = i;
+        }
+        return true;
+    });
+    var selectedIndex = await frame.$$eval('.vui-input[type=radio]', inputs => {
+        let index;
+        inputs.forEach((input, i) => {
+            if (input.getAttribute('checked') == 'checked') {
+                index = i;
+            }
+        });
+        return index;
+    });
+
+    texts[spot] = multi[selectedIndex];
+    let num = 0;
+    answers = texts.map(text => {
+        return { name: `Question ${++num}`, response_text: text };
+    });
+    console.log(answers)
+    questions = questions.map(q => {
+        q.answer = answers.filter(a => {
+            return a.name === q.name;
+        })[0].response_text;
+        return q;
+    });
+    data.questions = questions;
     return data;
 }
 
@@ -83,7 +106,7 @@ async function clickAndScrape(link) {
 
     /* Navigate to the d2l backdoor login page and wait for it to load */
     await page.goto('https://byui.brightspace.com/d2l/login?noredirect=true');
-    await page.waitFor('.d2l-login-portal-login.d2l-login-portal-bordered')
+    await page.waitFor('.d2l-login-portal-login.d2l-login-portal-bordered');
 
     /* Type in my username and password, which are set as environment varaibles within the console */
     await page.type('#userName', process.env.D2L_USERNAME);
@@ -97,10 +120,11 @@ async function clickAndScrape(link) {
 
     /* Go to the quiz page (link is the one passed into the function) and wait for it to load */
     await page.goto(link);
-    await page.waitForSelector('.di_i');
+    await page.waitForSelector('.d2l-select[title*=Results]');
+    // await page.select('.d2l-select[title*=Results]', '200');
+    // await page.waitForSelector('.d2l-select[title*=Results]');
 
     try {
-
         var submissions = await page.$$('a[title*=Submission]');
         // for (let i = 0; i < submissions.length; i++) {
         // const submission = submissions[i];
@@ -161,4 +185,5 @@ async function clickAndScrape(link) {
 
 /* Function call, passes in one test URL but should eventually run through allLinks */
 clickAndScrape('https://byui.brightspace.com/d2l/lms/grades/admin/enter/grade_item_edit.d2l?objectId=1745428&ou=288274').catch(console.log)
+// clickAndScrape('https://byui.brightspace.com/d2l/lms/grades/admin/enter/grade_item_edit.d2l?objectId=2077072&ou=417283').catch(console.log)
 
