@@ -28,8 +28,26 @@ async function scrapeData(frame) {
     data.link = await frame.url();
 
     // get divs that have questions
-    var qAndAs = await frame.$$('div[style*="margin-left:0.9em;"]');
-    console.log(qAndAs.children);
+    var divs = await frame.$$('div[style*="margin-left:0.9em;"]');
+    var num = 0;
+    var qAndAs = [];
+    for (let div of divs) {
+        let questionText = await div.$eval('.drt.d2l-htmlblock.d2l-htmlblock-deferred:not(.d2l-htmlblock-untrusted)', q => q.innerText);
+        let answer = await div.$$eval('.drt.d2l-htmlblock.d2l-htmlblock-untrusted', ans => {
+            if (ans.length === 1) return ans[0].innerText;
+            else if (ans.length === 0) return await div.$eval('.ds_b', noText => noText.innerText);
+            // let options
+            // let selected = await div.$$eval('.vui-input[type=radio]', inputs => {
+            //     let index;
+            //     inputs.forEach((input, i) => {
+            //         if (input.getAttribute('checked') == 'checked') index = i;
+            //     });
+            //     return index;
+            // });
+        });
+        qAndAs.push({ name: `Question ${++num}`, text: questionText, response_text: answer });
+    }
+    console.log(qAndAs)
 
     /*************************************************************************************************/
     // // get questions from popup
