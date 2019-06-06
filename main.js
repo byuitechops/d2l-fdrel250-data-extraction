@@ -14,7 +14,7 @@ async function timeout() {
  * This function scrapes all data from a single
  * student submission popup.
  ***********************************************/
-async function scrapeData(frame) {
+async function scrapeSubmissionData(frame) {
     var data = await frame.$$eval('.d_tl.d_tm.d_tn', items => {
         let tmp = {};
         // set the sis user id
@@ -33,9 +33,14 @@ async function scrapeData(frame) {
     var qAndAs = [];
     for (let div of divs) {
         let questionText = await div.$eval('.drt.d2l-htmlblock.d2l-htmlblock-deferred:not(.d2l-htmlblock-untrusted)', q => q.innerText);
+        var noText = await div.$('.ds_b');
         let answer = await div.$$eval('.drt.d2l-htmlblock.d2l-htmlblock-untrusted', ans => {
             if (ans.length === 1) return ans[0].innerText;
-            else if (ans.length === 0) return await div.$eval('.ds_b', noText => noText.innerText);
+            else if (ans.length === 0) {
+                return -1;
+            } else {
+
+            }
             // let options
             // let selected = await div.$$eval('.vui-input[type=radio]', inputs => {
             //     let index;
@@ -146,7 +151,7 @@ async function clickAndScrape({ submission, page }) {
 
         /* scrape data from popup and return student's Q&As */
         await timeout();
-        var data = await scrapeData(frame);
+        var data = await scrapeSubmissionData(frame);
         var title = await page.$eval("a[title*=FDREL]", course => {
             var code = course.getAttribute('href').split('/').pop();
             var semester = course.innerText.split('; ').pop();
@@ -204,7 +209,7 @@ async function openLink(link) {
         var submissions = await page.$$('a[title*=Submission]');
         // for (let i = 0; i < submissions.length; i++) {
         // const submission = submissions[i];
-        submissions = submissions.slice(0, 3).map(submission => { return { submission, page }; });
+        submissions = submissions.slice(1, 2).map(submission => { return { submission, page }; });
         data = await pmap(submissions, clickAndScrape, { concurrency: 1 });
         await browser.close();
         // console.dir(data, { depth: 4 });
