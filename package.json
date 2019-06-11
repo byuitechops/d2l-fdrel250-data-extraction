@@ -18,6 +18,7 @@
   },
   "homepage": "https://github.com/byuitechops/d2l-fdrel250-data-extraction#readme",
   "dependencies": {
+    "chalk": "^2.4.2",
     "csv-parser": "^2.2.0",
     "fs": "0.0.1-security",
     "p-map": "^2.1.0",

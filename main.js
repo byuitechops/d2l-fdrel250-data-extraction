@@ -4,6 +4,7 @@ const {
     sortSection,
     sortSemesters
 } = require('./sort.js');
+const chalk = require('chalk');
 
 // This function waits 1000ms to allow the popup to load.
 async function timeout() {
@@ -28,98 +29,60 @@ async function scrapeSubmissionData(frame) {
     data.link = await frame.url();
 
     // get divs that have questions
-    var divs = await frame.$$('div[style*="margin-left:0.9em;"]');
-    var num = 0;
-    var qAndAs = [];
-    for (let div of divs) {
-        let questionText = await div.$eval('.drt.d2l-htmlblock.d2l-htmlblock-deferred:not(.d2l-htmlblock-untrusted)', q => q.innerText);
-        var noText = await div.$('.ds_b');
-        let answer = await div.$$eval('.drt.d2l-htmlblock.d2l-htmlblock-untrusted', ans => {
-            if (ans.length === 1) return ans[0].innerText;
-            else if (ans.length === 0) {
-                return -1;
-            } else {
-
+    try {
+        var divs = await frame.$$('div[style*="margin-left:0.9em;"]');
+        var num = 0;
+        var qAndAs = [];
+        for (let div of divs) {
+            let questionText = await div.$eval('.drt.d2l-htmlblock.d2l-htmlblock-deferred:not(.d2l-htmlblock-untrusted)', q => q.innerText);
+            let answer = await div.$$eval('.drt.d2l-htmlblock.d2l-htmlblock-untrusted', ans => {
+                let ansObj = { length: ans.length };
+                if (ans.length === 1) ansObj.text = ans[0].innerText;
+                else if (ans.length > 1) ansObj.options = ans.map(a => a.innerText);
+                return ansObj;
+            });
+            if (answer.length === 0) {
+                answer.text = await div.$eval('.ds_b', no => no.innerText);
+            } else if (answer.length > 1) {
+                let selected = await div.$$eval('.vui-input[type=radio]', inputs => {
+                    let index;
+                    inputs.forEach((input, i) => {
+                        if (input.getAttribute('checked') == 'checked') index = i;
+                    });
+                    return index;
+                });
+                if (selected !== undefined) answer.text = answer.options[selected];
+                else answer.text = '- No choice selected -';
             }
-            // let options
-            // let selected = await div.$$eval('.vui-input[type=radio]', inputs => {
-            //     let index;
-            //     inputs.forEach((input, i) => {
-            //         if (input.getAttribute('checked') == 'checked') index = i;
-            //     });
-            //     return index;
-            // });
-        });
-        qAndAs.push({ name: `Question ${++num}`, text: questionText, response_text: answer });
+            qAndAs.push({ name: `Question ${++num}`, text: questionText, response_text: answer.text });
+        }
+        data.questions = qAndAs;
+    } catch (err) {
+        data.questions = [];
+        console.log(`ERROR SCRAPING SUBMISSION: Answers could not be located for student ${data.sis_user_id}`);
     }
-    console.log(qAndAs)
-
-    /*************************************************************************************************/
-    // // get questions from popup
-    // var questions = await frame.$$eval('.drt.d2l-htmlblock.d2l-htmlblock-deferred:not(.d2l-htmlblock-untrusted)', div => {
-    //     let num = 0;
-    //     return div.map(d => {
-    //         return { name: `Question ${++num}`, text: d.innerText };
-    //     });
-    // });
-    // // get answers from popup
-    // var answers = await frame.$$eval('.drt.d2l-htmlblock.d2l-htmlblock-untrusted', div => {
-    //     return div.map(d => { return d.innerText; }).slice(1);
-    // });
-
-    // // loop through answer text to find multiple choice questions
-    // var multi = [];
-    // let spot;
-    // let texts = answers.filter((text, i) => {
-    //     if (text.search(/[b-d]\)\s\n\n\t\n\n/) !== -1) {
-    //         multi.push(text);
-    //         return false;
-    //     }
-    //     if (text.search(/a\)\s\n\n\t\n\n/) !== -1) {
-    //         multi.push(text);
-    //         spot = i;
-    //     }
-    //     return true;
-    // });
-    // // find the answer the student selected and trash the other multi choice answers
-    // var selectedIndex = await frame.$$eval('.vui-input[type=radio]', inputs => {
-    //     let index;
-    //     inputs.forEach((input, i) => {
-    //         if (input.getAttribute('checked') == 'checked') {
-    //             index = i;
-    //         }
-    //     });
-    //     return index;
-    // });
-    // texts[spot] = multi[selectedIndex];
-    // // map answers to questions
-    // let num = 0;
-    // answers = texts.map(text => {
-    //     return { name: `Question ${++num}`, response_text: text };
-    // });
-    // // set question objects and return student data
-    // questions = questions.map(q => {
-    //     q.answer = answers.filter(a => {
-    //         return a.name === q.name;
-    //     })[0].response_text;
-    //     return q;
-    // });
-    /*************************************************************************************************/
-
-
-    // data.questions = questions;
     return data;
 }
 
 /********************************************************************************
  * This function completes all the puppeteer tasks of clicking through the d2l UI.
  *******************************************************************************/
-async function clickAndScrape({ submission, page }) {
+async function clickAndScrape({ submission, page, subLength }, i) {
+    let nextPage = await page.$('a[title*="Next Page"]');
+    let goToNext = false;
+    if (nextPage !== null) {
+        // TODO: Find a way to access this data -> is this submission in the last row or not? if so then "Go To Next" page after finished scraping.
+        goToNext = submission.parentNode.parentNode.parentNode.parentNode.parentNode.classList.contains('d2l-table-row-last') ? true : false;
+        console.log(goToNext);
+    }
     // open the popup
     const [popup] = await Promise.all([
         new Promise(resolve => page.once('popup', resolve)),
+        submission.hover(),
         submission.click()
     ]);
+    console.log(`${i + 1} / ${subLength}`);
+    let data;
     try {
         /* Wait for popup and select most recent attempt */
         await popup.waitForFunction(() => {
@@ -151,7 +114,7 @@ async function clickAndScrape({ submission, page }) {
 
         /* scrape data from popup and return student's Q&As */
         await timeout();
-        var data = await scrapeSubmissionData(frame);
+        data = await scrapeSubmissionData(frame);
         var title = await page.$eval("a[title*=FDREL]", course => {
             var code = course.getAttribute('href').split('/').pop();
             var semester = course.innerText.split('; ').pop();
@@ -162,22 +125,23 @@ async function clickAndScrape({ submission, page }) {
         data.sections = title.sections;
         data.course_id = title.code;
     } catch (error) {
-        console.log("ERROR SCRAPING SUBMISSION: ", error.message);
+        console.log(`ERROR SCRAPING SUBMISSION: `, error.message);
+        data.questions = [];
     }
     await popup.close();
     await page.waitForSelector('a[title*=Submission]');
+    if (goToNext) {
+        await nextPage.click();
+    }
     return data;
 }
 
 async function openLink(link) {
     /* Define the browser */
     const browser = await puppeteer.launch({
-        // slowMo: 100,
+        slowMo: 10,
         headless: false,
-        defaultViewport: {
-            width: 1920,
-            height: 1080
-        },
+        defaultViewport: null,
         handleSIGINT: true,
         args: ['--start-maximized']
     });
@@ -206,26 +170,30 @@ async function openLink(link) {
 
     let data;
     try {
-        var submissions = await page.$$('a[title*=Submission]');
-        // for (let i = 0; i < submissions.length; i++) {
-        // const submission = submissions[i];
-        submissions = submissions.slice(1, 2).map(submission => { return { submission, page }; });
+        var submissions = await page.$$('a[title*=ubmission]');
+        await page.$eval('d2l-floating-buttons', container => {
+            container.parentNode.removeChild(container);
+        });
+        let subLength = submissions.length;
+        submissions = submissions.map(submission => { return { submission, page, subLength }; });
         data = await pmap(submissions, clickAndScrape, { concurrency: 1 });
         await browser.close();
         // console.dir(data, { depth: 4 });
     } catch (error) {
         console.log(`ERROR READING SUBMISSIONS: `, error.message);
+        data = [];
     }
     return data;
 }
 
 // export main
 module.exports = {
-    async main(link) {
+    async main({ link, length }, i) {
+        console.log(chalk.green(`Opening link ${i + 1} out of ${length}.`));
+        console.log(link);
         var data = await openLink(link);
         // console.dir(data, { depth: 4 });
-        // var sortedData = sortSection(data);
-        // return sortedData;
-        return { yo: 'yo' };
+        var sortedData = sortSection(data);
+        return sortedData;
     }
 };
