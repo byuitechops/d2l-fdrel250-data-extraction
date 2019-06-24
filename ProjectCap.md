@@ -1,5 +1,5 @@
 # Project Capture Document for D2L FDREL250 Data Extraction
-#### *Author: Emma Fisher*
+#### *Author: Emma Fisher, Seth Bolander*
 #### *Stakeholder: Matthew Zachreson*
 #### *Date: April 26, 2019*
 
@@ -21,7 +21,7 @@ which will automate the process of collecting quiz responses.
 # Requirements
 
 ### General Requirements
-A CSV or JSON generated with all the response data from the 250 Toolkit Assessment Quiz in every FDREL 250 course in every semester that
+A JSON generated with all the response data from the 250 Toolkit Assessment Quiz in every FDREL 250 course in every semester that
 is in D2L.
 
 ### Input Requirements
@@ -39,29 +39,32 @@ Matthew Zachreson simply told me.
 #### Definition of Outputs
 
 JSON
-```js
+```json
 {
     "Semester": {
         "name": "WINTER 2018",
         "sections": [
             {
-                "name": "01",
-                "id": "00123",
+                "number": [
+                    "01",
+                    "02"
+                ],
+                "course_id": "00123",
                 "questions": [
                     {
                         "name": "question01",
                         "text": "Who am I?",
                         "responses": [
                             {
-                                "student_id": 123456789,
+                                "sis_user_id": 123456789,
                                 "response_text": "nbfjdnh",
-                                "timestamp": "1-20-18 5:30:00",
+                                "date": "Dec 25, 2018",
                                 "link": "www."
                             },
                             {
-                                "student_id": 123456789,
+                                "sis_user_id": 123456789,
                                 "response_text": "nbfjdnh",
-                                "timestamp": "1-20-18 5:30:00",
+                                "date": "Jan 1, 2018",
                                 "link": "www."
                             }
                         ]
