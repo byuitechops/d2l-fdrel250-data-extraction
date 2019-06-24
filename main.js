@@ -13,6 +13,61 @@ async function timeout() {
 
 /***********************************************
  * This function scrapes all data from a single
+ * student submission popup that contains 
+ * "answer" labels instead of "d2l-htmlblock-untrusted"
+ * classes
+ ***********************************************/
+async function scrapeSubmissionDataWithLabels(frame) {
+    var data = await frame.$$eval('.d_tl.d_tm.d_tn', items => {
+        let tmp = {};
+        // set the sis user id
+        tmp.sis_user_id = items[0].innerText.split(' ').pop().replace(')', '');
+        // set the date stamp
+        tmp.date = items[2].innerText.split(' ').slice(1, 4).join(' ');
+
+        return tmp;
+    });
+    // set the link of this student's submission
+    data.link = await frame.url();
+
+    // get divs that have questions
+    try {
+        var divs = await frame.$$('div[style*="margin-left:0.9em;"]');
+        var num = 0; // Question count
+        var qAndAs = [];
+        for (let div of divs) {
+            let questionText = await div.$eval('.drt.d2l-htmlblock.d2l-htmlblock-deferred:not(.d2l-htmlblock-untrusted)', q => q.innerText);
+            let answer = await div.$$eval('.d_tl.d_tm.d_tw', ans => {
+                let ansObj = { length: ans.length };
+                if (ans.length === 2) ansObj.text = ans[0].innerText; // if there are only 2 things with these classes then the answer is ans[0] 
+                else if (ans.length > 2) ansObj.options = ans.map(a => a.innerText); // if there are more than it's multiple choice
+                return ansObj;
+            });
+            if (answer.length === 0) {
+                answer.text = "- No text entered -"; // otherwise they did not answer
+            } else if (answer.length > 2) { // handling for multiple choice question
+                let selected = await div.$$eval('.vui-input[type=radio]', inputs => {
+                    let index;
+                    inputs.forEach((input, i) => {
+                        if (input.getAttribute('checked') == 'checked') index = i;
+                    });
+                    return index;
+                });
+                if (selected !== undefined) answer.text = answer.options[selected];
+                else answer.text = '- No choice selected -';
+            }
+            qAndAs.push({ name: `Question ${++num}`, text: questionText, response_text: answer.text });
+        }
+        data.questions = qAndAs;
+    } catch (err) {
+        data.questions = [];
+        console.log(`ERROR SCRAPING SUBMISSION: Answers could not be located for student ${data.sis_user_id}`);
+    }
+    return data;
+}
+
+/***********************************************
+ * This function scrapes all data from a single
  * student submission popup.
  ***********************************************/
 async function scrapeSubmissionData(frame) {
@@ -68,20 +123,13 @@ async function scrapeSubmissionData(frame) {
  * This function completes all the puppeteer tasks of clicking through the d2l UI.
  *******************************************************************************/
 async function clickAndScrape({ submission, page, subLength }, i) {
-    let nextPage = await page.$('a[title*="Next Page"]');
-    let goToNext = false;
-    if (nextPage !== null) {
-        // TODO: Find a way to access this data -> is this submission in the last row or not? if so then "Go To Next" page after finished scraping.
-        goToNext = submission.parentNode.parentNode.parentNode.parentNode.parentNode.classList.contains('d2l-table-row-last') ? true : false;
-        console.log(goToNext);
-    }
+    console.log(`${i + 1} / ${subLength}`);
     // open the popup
     const [popup] = await Promise.all([
         new Promise(resolve => page.once('popup', resolve)),
         submission.hover(),
         submission.click()
     ]);
-    console.log(`${i + 1} / ${subLength}`);
     let data;
     try {
         /* Wait for popup and select most recent attempt */
@@ -112,9 +160,10 @@ async function clickAndScrape({ submission, page, subLength }, i) {
         await timeout();
         await frame.select('select[name=attempt]', attempt);
 
-        /* scrape data from popup and return student's Q&As */
+        /* scrape data from popup and return student's Q&As. Use either w/ labels or w/o labels depending on course. */
         await timeout();
         data = await scrapeSubmissionData(frame);
+        // data = await scrapeSubmissionDataWithLabels(frame);
         var title = await page.$eval("a[title*=FDREL]", course => {
             var code = course.getAttribute('href').split('/').pop();
             var semester = course.innerText.split('; ').pop();
@@ -127,15 +176,17 @@ async function clickAndScrape({ submission, page, subLength }, i) {
     } catch (error) {
         console.log(`ERROR SCRAPING SUBMISSION: `, error.message);
         data.questions = [];
+        console.log(data);
     }
     await popup.close();
-    await page.waitForSelector('a[title*=Submission]');
-    if (goToNext) {
-        await nextPage.click();
-    }
+    await page.waitForSelector('a[title*=ubmission]');
     return data;
 }
 
+/******************************************************************************
+ * This function opens a browser instance, logs in to D2L, and then loops
+ * through every submission in the given link.
+ ******************************************************************************/
 async function openLink(link) {
     /* Define the browser */
     const browser = await puppeteer.launch({
@@ -168,32 +219,50 @@ async function openLink(link) {
     await page.goto(link);
     await page.waitForSelector('.d2l-select[title*=Results]');
 
-    let data;
+    var data = [];
     try {
-        var submissions = await page.$$('a[title*=ubmission]');
-        await page.$eval('d2l-floating-buttons', container => {
-            container.parentNode.removeChild(container);
-        });
-        let subLength = submissions.length;
-        submissions = submissions.map(submission => { return { submission, page, subLength }; });
-        data = await pmap(submissions, clickAndScrape, { concurrency: 1 });
-        await browser.close();
+        var currentData = [];
+        var nextPage = await page.$('a[title*="Next Page"]');
+        do {
+            var submissions = await page.$$('a[title*=ubmission]');
+            await page.$eval('d2l-floating-buttons', container => {
+                container.parentNode.removeChild(container);
+            });
+            submissions = submissions.map(submission => { return { submission, page, subLength: submissions.length }; });
+            // if (submissions.length >= 10) submissions = submissions.slice(Math.floor(submissions.length * .99));
+            currentData = await pmap(submissions, clickAndScrape, { concurrency: 1 });
+            data = data.concat(currentData);
+            nextPage = await page.$('a[title*="Next Page"]');
+            if (nextPage !== null) {
+                await Promise.all([
+                    page.waitForNavigation(),
+                    nextPage.click()
+                ]);
+            }
+        } while (nextPage !== null);
+
         // console.dir(data, { depth: 4 });
     } catch (error) {
-        console.log(`ERROR READING SUBMISSIONS: `, error.message);
-        data = [];
+        console.log(chalk.red(`ERROR READING SUBMISSIONS: ${error}`));
     }
+    await browser.close();
     return data;
 }
 
-// export main
+
 module.exports = {
     async main({ link, length }, i) {
         console.log(chalk.green(`Opening link ${i + 1} out of ${length}.`));
         console.log(link);
+        // open link
         var data = await openLink(link);
-        // console.dir(data, { depth: 4 });
+        if (data.length === 0) {
+            console.log(chalk.red(`ERROR: Link contained no submissions or scraping did not complete correctly.`));
+            return data;
+        }
+        // sort returned data
         var sortedData = sortSection(data);
+        // console.dir(sortedData, { depth: 4 });
         return sortedData;
     }
 };
